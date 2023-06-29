@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 
+import argparse
 import time
 import subprocess
 import xml.etree.ElementTree as ET
 import sys
 
-HOSTNAMES=["www"]
-DOMAIN="mydomain.com"
-PASSWORD="mynamecheapdynamicupdatepassword"
+# Example: ./update_namecheap.py --host www --domain example.com --password 15dbb231e1242342abbde42153fdaab1
 
 def run_cmd(cmd_and_params):
     proc = subprocess.Popen(cmd_and_params, stdout=subprocess.PIPE)
     res, _ = proc.communicate()
     return res
 
-prev_ip = None
-while True:
+
+def tick(args, state):
     try:
         ip = run_cmd(["curl", "-s", "ipecho.net/plain"])
         ip = ip.split(b'.')
@@ -24,10 +23,12 @@ while True:
         for part in ip:
             _ = int(part)
         ip = b'.'.join(ip).decode("utf8")
-        if ip != prev_ip:
+        if ip != state["prev_ip"]:
             print("Detected new ip address: %s" % (ip,))
-            for host in HOSTNAMES:
-                cmd = "https://dynamicdns.park-your-domain.com/update?host=%s&domain=%s&password=%s&ip=%s" % (host, DOMAIN, PASSWORD, ip)
+            for host in args.host:
+                url = "https://dynamicdns.park-your-domain.com/update?host=%s" \
+                    "&domain=%s&password=%s&ip=%s"
+                cmd = url % (host, args.domain, args.password, ip)
                 res = run_cmd(["curl", "-s", cmd])
                 if not res:
                     raise ValueError("No valid response")
@@ -41,8 +42,26 @@ while True:
                 if not ok:
                     print(res)
                     raise ValueError("Error response")
-                prev_ip = ip
-                print("Succesfully updated %s.%s." % (host, DOMAIN))
+                state["prev_ip"] = ip
+                print("Succesfully updated %s.%s." % (host, args.domain))
     except ValueError:
         print("Failed. Trying again later.")
-    time.sleep(30)
+    
+
+def main(state):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--domain',
+                        help='Domain (e.g. example.com)', required=True)
+    parser.add_argument('--host', nargs='+',
+                        help='Host name (e.g. www)', required=True)
+    parser.add_argument('-p', '--password',
+                        help='Namecheap dynamic dns password', required=True)
+    args = parser.parse_args()
+    
+    while True:
+        tick(args, state)
+        time.sleep(60)
+
+if __name__ == "__main__":
+    state = { "prev_ip": "" }
+    main(state)
