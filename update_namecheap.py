@@ -4,9 +4,10 @@ import argparse
 import time
 import subprocess
 import xml.etree.ElementTree as ET
-import sys
+import requests
 
 # Example: ./update_namecheap.py --host www --domain example.com --password 15dbb231e1242342abbde42153fdaab1
+
 
 def run_cmd(cmd_and_params):
     proc = subprocess.Popen(cmd_and_params, stdout=subprocess.PIPE)
@@ -14,15 +15,14 @@ def run_cmd(cmd_and_params):
     return res
 
 
+def get_ip():
+    ip = requests.get('https://api.ipify.org').content.decode('utf8')
+    return ip
+
+
 def tick(args, state):
     try:
-        ip = run_cmd(["curl", "-s", "ipecho.net/plain"])
-        ip = ip.split(b'.')
-        if len(ip) != 4:
-            raise ValueError("Wrong num of parts")
-        for part in ip:
-            _ = int(part)
-        ip = b'.'.join(ip).decode("utf8")
+        ip = get_ip()
         if ip != state["prev_ip"]:
             print("Detected new ip address: %s" % (ip,))
             for host in args.host:
@@ -62,6 +62,7 @@ def main(state):
         tick(args, state)
         time.sleep(60)
 
+
 if __name__ == "__main__":
-    state = { "prev_ip": "" }
+    state = {"prev_ip": ""}
     main(state)
